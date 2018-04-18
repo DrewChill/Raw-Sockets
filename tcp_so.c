@@ -1,11 +1,12 @@
-/*
- * tcp_handler.c
- *
- *  Created on: Dec 8, 2015
- *      Author: Praveen
- */
+//
+//  tcp_so.c
+//  Tinder.fm
+//
+//  Created by Andrew Hill on 4/15/18.
+//  Copyright © 2018 Andrew Hill. All rights reserved.
+//
 
-#include "tcp_handler.h"
+#include "tcp_so.h"
 
 #define STARTING_SEQUENCE 1
 #define TCP_WORD_LENGTH_WITH_NO_OPTIONS 5
@@ -140,7 +141,7 @@ static void destroy_packet(packet_t* packet)
 {
     if (packet->timer != NULL)
         dispatch_cancel(packet->timer);
-        //timer_delete(packet->timer);
+    //timer_delete(packet->timer);
     
     free(packet);
 }
@@ -166,17 +167,17 @@ static void remove_acked_entries(uint32_t next_expected_seq)
 static void reset_packet_retransmission_timer(dispatch_source_t* timer,
                                               uint16_t timeInSecs)
 {
-//    struct itimerspec timer_value =
-//    { 0 };
-//    timer_value.it_interval.tv_sec = timeInSecs;
-//    timer_value.it_value.tv_sec = timeInSecs;
-//    
-//    if (timer_settime(*timer_id, 0, &timer_value, NULL) < 0)
-//    {
-//        printf("Failed to set time!!");
-//        timer_delete(*timer_id);
-//        *timer_id = NULL;
-//    }
+    //    struct itimerspec timer_value =
+    //    { 0 };
+    //    timer_value.it_interval.tv_sec = timeInSecs;
+    //    timer_value.it_value.tv_sec = timeInSecs;
+    //
+    //    if (timer_settime(*timer_id, 0, &timer_value, NULL) < 0)
+    //    {
+    //        printf("Failed to set time!!");
+    //        timer_delete(*timer_id);
+    //        *timer_id = NULL;
+    //    }
 }
 
 static void build_ip_header(struct ip* iph, uint16_t ip_payload_len)
@@ -216,10 +217,6 @@ static void build_tcp_header(struct tcphdr* tcph, tcp_flags_t* flags,
         tcphflags |= TH_PUSH;
     }
     tcph->th_flags = tcphflags;
-//    tcph->syn = flags->syn;
-//    tcph->ack = flags->ack;
-//    tcph->fin = flags->fin;
-//    tcph->psh = flags->psh;
     tcph->th_ack = htonl(tcp_state.server_next_seq_num);
     
     if (flags->syn)
@@ -286,19 +283,19 @@ EXIT: pthread_mutex_unlock(&tcp_state.session_info.send_fd_lock);
 
 static void handle_packet_retransmission()
 {
-//    packet_t* packet = NULL;
-//    pthread_mutex_lock(&tcp_state.sender_info.tcp_retx_lock);
-//    int index = tcp_state.sender_info.retx_buffer_head;
-//    while (index != tcp_state.sender_info.retx_buffer_tail)
-//    {
-//        packet = tcp_state.sender_info.retx_buffer[index].packet;
-//        reset_packet_retransmission_timer(&packet->retransmit_timer_id, 0);
-//        if (send_packet(packet->payload, packet->payload_len) < 0)
-//            printf("Failed to retransmit packet!!");
-//        reset_packet_retransmission_timer(&packet->retransmit_timer_id, 60);
-//        index++;
-//    }
-//    pthread_mutex_unlock(&tcp_state.sender_info.tcp_retx_lock);
+    //    packet_t* packet = NULL;
+    //    pthread_mutex_lock(&tcp_state.sender_info.tcp_retx_lock);
+    //    int index = tcp_state.sender_info.retx_buffer_head;
+    //    while (index != tcp_state.sender_info.retx_buffer_tail)
+    //    {
+    //        packet = tcp_state.sender_info.retx_buffer[index].packet;
+    //        reset_packet_retransmission_timer(&packet->retransmit_timer_id, 0);
+    //        if (send_packet(packet->payload, packet->payload_len) < 0)
+    //            printf("Failed to retransmit packet!!");
+    //        reset_packet_retransmission_timer(&packet->retransmit_timer_id, 60);
+    //        index++;
+    //    }
+    //    pthread_mutex_unlock(&tcp_state.sender_info.tcp_retx_lock);
 }
 
 static int send_ack_segment(uint8_t fin)
@@ -497,20 +494,6 @@ static int send_tcp_segment(packet_t* packet)
     pthread_mutex_unlock(&tcp_state.sender_info.tcp_retx_lock);
     
 EXIT: return ret;
-}
-
-static int send_syn()
-{
-    int ret = -1;
-    packet_t* packet = create_packet();
-    tcp_flags_t flags =
-    { 0 };
-    
-    flags.syn = 1;
-    build_packet_headers(packet, 0, &flags);
-    tcp_state.tcp_current_state = SYN_SENT;
-    
-    return send_tcp_segment(packet);
 }
 
 static int receive_syn_ack_segment(tcp_flags_t* flags)
@@ -847,11 +830,81 @@ static int create_worker_threads()
 EXIT: return ret;
 }
 
+void *receive_syn_segment(void *flags_data)
+{
+    u_char flags;
+    flags = (u_char)flags_data;
+    int ret = -1;
+    packet_t* packet = create_packet();
+    struct tcphdr *tcph;
+    
+    while (1)
+    {
+        if ((ret = receive_packet(packet)) < 0)
+        {
+            printf("Receive error!! Exiting.. ");
+            goto EXIT;
+        }
+        
+        tcph = (struct tcphdr *) packet->offset[TCP_OFFSET];
+        
+        if ((tcph->th_flags & TH_SYN) == (flags & TH_SYN))
+            break;
+        
+        if ((tcph->th_flags & TH_RST) || !tcp_state.syn_retries)
+        {
+            ret = -1;
+            goto EXIT;
+        }
+    }
+    
+    process_ack(tcph, 1);
+    
+    
+    //TODO: check this out. Do something to tcp state
+    
+EXIT: destroy_packet(packet);
+    pthread_exit(NULL);
+    //return ret;
+}
+
+void *send_syn()
+{
+    //int ret = -1;
+    packet_t* packet = create_packet();
+    tcp_flags_t flags =
+    { 0 };
+    
+    flags.syn = 1;
+    build_packet_headers(packet, 0, &flags);
+    tcp_state.tcp_current_state = SYN_SENT;
+    
+    return send_tcp_segment(packet);
+}
+
 //Blocking call
 int connect_tcp(int send_fd, int recv_fd, struct sockaddr_in* dst_addr,
                 struct sockaddr_in* src_addr)
 {
     int ret = 0;
+    
+    //start syn listener thread
+    pthread_t syn_listener;
+    u_char flags_recv =
+    { 0 };
+    flags_recv |= TH_SYN;
+    //seems ok?
+    pthread_create(&syn_listener, NULL, receive_syn_segment, (void*)flags_recv);
+    
+    //send syn thread
+    pthread_t syn_sender;
+    u_char flags_snd =
+    { 0 };
+    flags_snd |= TH_SYN;
+    //seems ok? lol
+    
+    //join threads and start styandard worker threads
+    
     
     // Initialize the TCP Session State with the given details
     bzero(&tcp_state, sizeof(tcp_state__t));
@@ -867,26 +920,26 @@ int connect_tcp(int send_fd, int recv_fd, struct sockaddr_in* dst_addr,
     initialize_mutex(&tcp_state.tcp_state_lock);
     initialize_mutex(&tcp_state.session_info.send_fd_lock);
     
-    tcp_flags_t flags =
-    { 0 };
-    flags.ack = 1;
-    flags.syn = 1;
-    if (((ret = send_syn()) < 0)
-        || ((ret = receive_syn_ack_segment(&flags)) < 0) || ((ret =
-                                                              send_ack_segment(0)) < 0))
-    {
-        printf("Failed to set up TCP Connection!!");
-        ret = -1;
-        goto EXIT;
-    }
-    
-    tcp_state.tcp_current_state = ESTABLISHED;
-    
-    if (((ret = create_worker_threads()) < 0))
-    {
-        printf("Failed to create worker threads!!\n");
-        ret = -1;
-    }
+//    tcp_flags_t flags =
+//    { 0 };
+//    flags.ack = 1;
+//    flags.syn = 1;
+//    if (((ret = send_syn()) < 0)
+//        || ((ret = receive_syn_ack_segment(&flags)) < 0) || ((ret =
+//                                                              send_ack_segment(0)) < 0))
+//    {
+//        printf("Failed to set up TCP Connection!!");
+//        ret = -1;
+//        goto EXIT;
+//    }
+//    
+//    tcp_state.tcp_current_state = ESTABLISHED;
+//    
+//    if (((ret = create_worker_threads()) < 0))
+//    {
+//        printf("Failed to create worker threads!!\n");
+//        ret = -1;
+//    }
     
 EXIT: return ret;
 }
@@ -1088,4 +1141,3 @@ int receive_data(char* buffer, int buffer_len)
     
     return total_bytes_read;
 }
-

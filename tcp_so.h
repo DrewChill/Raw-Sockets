@@ -1,12 +1,13 @@
-/*
- * tcp_handler.h
- *
- *  Created on: Dec 8, 2015
- *      Author: Praveen, DrewChill
- */
+//
+//  tcp_so.h
+//  Tinder.fm
+//
+//  Created by Andrew Hill on 4/15/18.
+//  Copyright © 2018 Andrew Hill. All rights reserved.
+//
 
-#ifndef TCP_HANDLER_H_
-#define TCP_HANDLER_H_
+#ifndef tcp_so_h
+#define tcp_so_h
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -163,4 +164,4 @@ int receive_data(char* buffer, int buffer_len);
 
 int close_tcp();
 
-#endif /* TCP_HANDLER_H_ */
+#endif /* tcp_so_h */
